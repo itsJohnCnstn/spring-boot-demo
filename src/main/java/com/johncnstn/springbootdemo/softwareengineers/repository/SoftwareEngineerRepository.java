@@ -1,7 +1,9 @@
 package com.johncnstn.springbootdemo.softwareengineers.repository;
 
-import com.johncnstn.springbootdemo.SoftwareEngineerEntity;
-import com.johncnstn.springbootdemo.softwareengineers.model.SoftwareEngineerDTO;
+import com.johncnstn.springbootdemo.softwareengineers.entity.SoftwareEngineerEntity;
+import com.johncnstn.springbootdemo.softwareengineers.mapper.SoftwareEngineerMapper;
+import com.johncnstn.springbootdemo.softwareengineers.model.SoftwareEngineerToCreateDTO;
+import com.johncnstn.springbootdemo.softwareengineers.model.SoftwareEngineerToUpdateDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -19,35 +21,34 @@ public class SoftwareEngineerRepository {
     private Integer id;
     private final Map<Integer, SoftwareEngineerEntity> softwareEngineersMap;
 
-    public SoftwareEngineerRepository() {
+    private final SoftwareEngineerMapper softwareEngineerMapper;
+
+    public SoftwareEngineerRepository(SoftwareEngineerMapper softwareEngineerMapper) {
         this.id = 0;
         softwareEngineersMap = new HashMap<>();
+        this.softwareEngineerMapper = softwareEngineerMapper;
 
-        id++;
-        var firstSoftwareEngineer = new SoftwareEngineerEntity(
-                id,
-                "Pawa",
-                List.of("java", "spring")
-        );
-        softwareEngineersMap.put(id, firstSoftwareEngineer);
-
-        id++;
-        var secondSoftwareEngineer = new SoftwareEngineerEntity(
-                id,
-                "Miha",
-                List.of("java", "kotlin", "spring")
-        );
-        softwareEngineersMap.put(id, secondSoftwareEngineer);
+//        id++;
+//        var firstSoftwareEngineer = new SoftwareEngineerEntity(
+//                id,
+//                "Pawa",
+//                List.of("java", "spring")
+//        );
+//        softwareEngineersMap.put(id, firstSoftwareEngineer);
+//
+//        id++;
+//        var secondSoftwareEngineer = new SoftwareEngineerEntity(
+//                id,
+//                "Miha",
+//                List.of("java", "kotlin", "spring")
+//        );
+//        softwareEngineersMap.put(id, secondSoftwareEngineer);
     }
 
-    // return from map put returns previous value
-    public SoftwareEngineerEntity create(SoftwareEngineerDTO softwareEngineerDTO) {
+    // return from map.put() returns the previous value!
+    public SoftwareEngineerEntity create(SoftwareEngineerToCreateDTO softwareEngineerToCreateDTO) {
         id++;
-        var engineerToCreate = SoftwareEngineerEntity.builder()
-                .id(id)
-                .name(softwareEngineerDTO.name())
-                .techStack(softwareEngineerDTO.techStack())
-                .build();
+        var engineerToCreate = softwareEngineerMapper.toEntity(id, softwareEngineerToCreateDTO);
         softwareEngineersMap.put(id, engineerToCreate);
         var createdEngineer = softwareEngineersMap.get(id);
         LOGGER.info("Created software engineer: {}", createdEngineer);
@@ -66,21 +67,24 @@ public class SoftwareEngineerRepository {
         return softwareEngineers;
     }
 
-    public SoftwareEngineerEntity update(Integer id, SoftwareEngineerDTO softwareEngineerDTO) {
+    public void update(Integer id, SoftwareEngineerToUpdateDTO softwareEngineerToUpdateDTO) {
         var engineerToUpdate = SoftwareEngineerEntity.builder()
                 .id(id)
-                .name(softwareEngineerDTO.name())
-                .techStack(softwareEngineerDTO.techStack())
+                .name(softwareEngineerToUpdateDTO.name())
+                .techStack(softwareEngineerToUpdateDTO.techStack())
                 .build();
         softwareEngineersMap.put(id, engineerToUpdate);
         var updatedEngineer = softwareEngineersMap.get(id);
-                LOGGER.info("Updated software engineer: {}", updatedEngineer);
-        return updatedEngineer;
+        LOGGER.info("Updated software engineer: {}", updatedEngineer);
     }
 
     public void delete(Integer id) {
         var deletedEngineer = softwareEngineersMap.remove(id);
         LOGGER.info("Deleted software engineer: {}", deletedEngineer);
+    }
+
+    public void deleteAll() {
+        softwareEngineersMap.clear();
     }
 
 }

@@ -1,11 +1,17 @@
 package com.johncnstn.springbootdemo.softwareengineers.controller;
 
-import com.johncnstn.springbootdemo.SoftwareEngineerEntity;
-import com.johncnstn.springbootdemo.softwareengineers.exception.EntityNotFoundException;
+import com.johncnstn.springbootdemo.softwareengineers.constants.ApiPaths;
 import com.johncnstn.springbootdemo.softwareengineers.model.SoftwareEngineerDTO;
-import com.johncnstn.springbootdemo.softwareengineers.repository.SoftwareEngineerRepository;
+import com.johncnstn.springbootdemo.softwareengineers.model.SoftwareEngineerToCreateDTO;
+import com.johncnstn.springbootdemo.softwareengineers.model.SoftwareEngineerToUpdateDTO;
+import com.johncnstn.springbootdemo.softwareengineers.service.SoftwareEngineerCommandService;
+import com.johncnstn.springbootdemo.softwareengineers.service.SoftwareEngineerQueryService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.lang.NonNull;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -13,68 +19,101 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
-import javax.validation.Valid;
-import javax.validation.constraints.NotNull;
-import java.net.URI;
 import java.util.List;
 
+/*
+ ✅ @RestController = @Controller + @ResponseBody → auto-serializes return values as JSON.
+ ✅ @RequestMapping(ApiPaths.ENGINEERS)
+     → Centralizes routing under a versioned API path (e.g., "/api/v1/software-engineers")
+     → Promotes consistency and reuse across tests, docs, and clients
+ ✅ @Validated enables method-level validation (e.g., @NotNull on @PathVariable)
+*/
+@Validated
 @RestController
-@RequestMapping(SoftwareEngineerController.SOFTWARE_ENGINEERS_PATH)
+@RequestMapping(ApiPaths.ENGINEERS)
 public class SoftwareEngineerController {
 
-    protected static final String BASE_PATH = "/api/v1";
-    protected static final String SOFTWARE_ENGINEERS_PATH = BASE_PATH + "/software-engineers";
-    private final SoftwareEngineerRepository softwareEngineerRepository;
+    private final SoftwareEngineerCommandService softwareEngineerCommandService;
+    private final SoftwareEngineerQueryService softwareEngineerQueryService;
 
-    public SoftwareEngineerController(SoftwareEngineerRepository softwareEngineerRepository) {
-        this.softwareEngineerRepository = softwareEngineerRepository;
+    public SoftwareEngineerController(SoftwareEngineerCommandService softwareEngineerCommandService,
+                                      SoftwareEngineerQueryService softwareEngineerQueryService) {
+        this.softwareEngineerCommandService = softwareEngineerCommandService;
+        this.softwareEngineerQueryService = softwareEngineerQueryService;
     }
 
+    /*
+     ✅ @Valid on @RequestBody triggers bean validation (e.g., @NotBlank, @Size) inside the DTO.
+     ✅ @NotNull ensures the request body itself is not null (extra safeguard).
+
+     ✅ URI is built with ServletUriComponentsBuilder:
+         - Context-safe (respects servlet path, version prefix)
+         - RESTful (returns 201 Created + Location header pointing to the new resource)
+    */
     @PostMapping
-    public ResponseEntity<SoftwareEngineerEntity> createSoftwareEngineer(@NotNull
-                                                                         @Valid
-                                                                         @RequestBody
-                                                                         SoftwareEngineerDTO softwareEngineerDTO) {
-        var createdSoftwareEngineer = softwareEngineerRepository.create(softwareEngineerDTO);
-        var uri = URI.create(SOFTWARE_ENGINEERS_PATH + "/" + createdSoftwareEngineer.getId());
-        return ResponseEntity.created(uri).body(createdSoftwareEngineer);
+    public ResponseEntity<SoftwareEngineerDTO> createSoftwareEngineer(@NotNull
+                                                                      @Valid
+                                                                      @RequestBody
+                                                                      SoftwareEngineerToCreateDTO softwareEngineerToCreateDTO) {
+        var softwareEngineer = softwareEngineerCommandService.create(softwareEngineerToCreateDTO);
+        var uri = ServletUriComponentsBuilder.fromCurrentRequest()
+                .path("/{id}")
+                .buildAndExpand(softwareEngineer.id())
+                .toUri();
+        return ResponseEntity.created(uri).body(softwareEngineer);
     }
 
     @GetMapping
-    public ResponseEntity<List<SoftwareEngineerEntity>> getSoftwareEngineers() {
-        var softwareEngineers = softwareEngineerRepository.getAll();
+    public ResponseEntity<List<SoftwareEngineerDTO>> getSoftwareEngineers() {
+        var softwareEngineers = softwareEngineerQueryService.getAll();
         return ResponseEntity.ok(softwareEngineers);
     }
 
+    /*
+     ✅ Retrieves a single engineer by ID.
+     ✅ @PathVariable + @NotNull: triggers validation if null is passed at runtime.
+     ✅ Service throws EntityNotFoundException if not found → handled by global exception handler.
+    */
     @GetMapping("/{id}")
-    public ResponseEntity<SoftwareEngineerEntity> getSoftwareEngineer(@PathVariable @NotNull Integer id) {
-        var softwareEngineer = findSoftwareEngineerByIdOrThrow(id);
+    public ResponseEntity<SoftwareEngineerDTO> getSoftwareEngineer(@PathVariable @NotNull Integer id) {
+        var softwareEngineer = softwareEngineerQueryService.getById(id);
         return ResponseEntity.ok(softwareEngineer);
     }
 
+    /*
+     ✅ RESTful full update using PUT:
+         - Idempotent: multiple same PUTs = same result.
+         - Doesn’t return a body, only status 204 No Content.
+         - DTO is validated with @Valid.
+
+     ✅ No ResponseEntity needed because:
+         - No response body
+         - @ResponseStatus is simpler and declarative
+    */
+    @ResponseStatus(HttpStatus.NO_CONTENT)
     @PutMapping("/{id}")
-    public ResponseEntity<SoftwareEngineerEntity> updateSoftwareEngineer(@PathVariable @NonNull Integer id,
-                                                                         @NotNull
-                                                                         @Valid
-                                                                         @RequestBody
-                                                                         SoftwareEngineerDTO softwareEngineerDTO) {
-        findSoftwareEngineerByIdOrThrow(id);
-        var updatedSoftwareEngineer = softwareEngineerRepository.update(id, softwareEngineerDTO);
-        return ResponseEntity.ok(updatedSoftwareEngineer);
+    public void updateSoftwareEngineer(@PathVariable @NonNull Integer id,
+                                       @NotNull
+                                       @Valid
+                                       @RequestBody
+                                       SoftwareEngineerToUpdateDTO softwareEngineerToUpdateDTO) {
+        softwareEngineerCommandService.update(id, softwareEngineerToUpdateDTO);
     }
 
+    /*
+     ✅ RESTful DELETE:
+         - 204 No Content for successful deletion
+         - Service layer throws if the entity is not found
+         - Stateless: deletes the resource and nothing more
+    */
+    @ResponseStatus(HttpStatus.NO_CONTENT)
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteSoftwareEngineer(@PathVariable @NotNull Integer id) {
-        findSoftwareEngineerByIdOrThrow(id);
-        softwareEngineerRepository.delete(id);
-        return ResponseEntity.noContent().build();
-    }
-
-    private SoftwareEngineerEntity findSoftwareEngineerByIdOrThrow(Integer id) {
-        return softwareEngineerRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("No engineer with id: %d".formatted(id)));
+    public void deleteSoftwareEngineer(@PathVariable @NotNull Integer id) {
+        softwareEngineerCommandService.delete(id);
     }
 
 }
